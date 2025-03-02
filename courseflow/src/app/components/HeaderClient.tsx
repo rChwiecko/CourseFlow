@@ -3,12 +3,21 @@
 import type React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogIn, User } from "lucide-react";
+import { LogIn, User, LogOut } from "lucide-react";
+import { signOut, SessionProvider } from "next-auth/react";
+import { useState } from "react";
+import { useSession } from "next-auth/react";
 
 // This is the client component that receives the session from the server component
 export default function HeaderClient({ session }: { session: any }) {
   const pathname = usePathname();
-  
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const { data: sessionStatus, status } = useSession();
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    await signOut({ callbackUrl: "/" });
+  };
+
   return (
     <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-10">
       <div className="container-custom py-4">
@@ -25,19 +34,40 @@ export default function HeaderClient({ session }: { session: any }) {
               <NavLink href="/" active={pathname === "/"}>
                 Home
               </NavLink>
-              <NavLink href="/create" active={pathname === "/create"}>
+              <NavLink
+                href={
+                  status === "authenticated" ? "/create" : "./api/auth/signin"
+                }
+                active={pathname === "/create"}
+              >
                 Create
               </NavLink>
             </nav>
 
             {session ? (
-              <div className="flex items-center space-x-1 bg-violet-600 text-white px-4 py-2 rounded-md">
-                <User className="w-4 h-4" />
-                <span>{session.user?.name || 'User'}</span>
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-1 bg-violet-600 text-white px-4 py-2 rounded-md">
+                  <User className="w-4 h-4" />
+                  <span>{session.user?.name || "User"}</span>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  disabled={isSigningOut}
+                  className="flex items-center space-x-1 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md transition-colors disabled:opacity-70"
+                >
+                  {isSigningOut ? (
+                    <span>Signing out...</span>
+                  ) : (
+                    <>
+                      <LogOut className="w-4 h-4" />
+                      <span>Sign Out</span>
+                    </>
+                  )}
+                </button>
               </div>
             ) : (
               <Link
-                href="/login"
+                href="./api/auth/signin"
                 className="flex items-center space-x-1 bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-md transition-colors"
               >
                 <LogIn className="w-4 h-4" />
