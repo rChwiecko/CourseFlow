@@ -3,19 +3,33 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --primary: #6d28d9;
+  --primary-hover: #7c3aed;
+  --background: #09090b;
+  --foreground: #f8fafc;
+  --accent: #22d3ee;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
 }
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-md font-medium transition-colors;
+  }
+
+  .btn-primary {
+    @apply bg-violet-700 hover:bg-violet-600 text-white;
+  }
+
+  .btn-outline {
+    @apply border border-gray-700 hover:bg-gray-800;
+  }
+
+  .container-custom {
+    @apply max-w-5xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+}
+
