@@ -15,6 +15,9 @@ export const authOption: NextAuthOptions = {
       clientSecret: GOOGLE_CLIENT_SECRET,
     }),
   ],
+  pages: {
+    signIn: '/auth/signin'
+  },
   callbacks: {
     async signIn({ account, profile }) {
       if (!profile?.email) {
