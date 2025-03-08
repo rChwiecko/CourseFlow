@@ -6,11 +6,17 @@ import ContentContainer from "../components/content-container";
 import FileUpload from "../components/file-upload";
 import { Trash2, FileText } from "lucide-react";
 import { PdfChunk } from "../functions/pdfreader";
+import { useSession } from "next-auth/react";
 
-// Define an interface for processed files
+// Define interfaces for data structures
 interface ProcessedFile {
   name: string;
   chunks: string[];
+}
+
+interface ExtractedEvents {
+  fileName: string;
+  events: string; // The raw events data from /api/skim
 }
 
 export default function Create() {
@@ -20,17 +26,20 @@ export default function Create() {
   const [chunkSize, setChunkSize] = useState<number>(4000);
   const [overlapSize, setOverlapSize] = useState<number>(1000);
   const [processingStatus, setProcessingStatus] = useState<string>("");
+  const [formattedResult, setFormattedResult] = useState<string>("");
 
   const handleFilesChange = (selectedFiles: File[]) => {
     setFiles(selectedFiles);
     // Reset processed files when new files are selected
     setProcessedFiles([]);
+    setFormattedResult("");
   };
 
   const handleDeleteFile = (index: number) => {
     setFiles(files.filter((_, i) => i !== index));
     // Reset processed files when files are deleted
     setProcessedFiles([]);
+    setFormattedResult("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -40,49 +49,100 @@ export default function Create() {
 
     setIsSubmitting(true);
     setProcessedFiles([]);
+    setFormattedResult("");
 
     try {
-      const results = [];
+      const extractedEvents: ExtractedEvents[] = [];
+      const chunkResults: ProcessedFile[] = [];
 
-      // Process each file one by one using the imported PdfChunk function
+      // Process each file one by one
       for (const file of files) {
         try {
+          // Step 1: Read through PDF with function
           setProcessingStatus(`Processing ${file.name}...`);
-          
-          // Use the imported PdfChunk function
           const chunks = await PdfChunk(file, chunkSize, overlapSize);
           
-          results.push({
-            fileName: file.name,
-            chunks,
-            totalChunks: chunks.length
+          // Store chunk results for UI display
+          chunkResults.push({
+            name: file.name,
+            chunks
           });
-          
-          console.log(`Processed ${file.name}: ${chunks.length} chunks created\nContent: ${chunks.join("\n")}`);
+
+          // Step 2: Pass the scanned PDF through a request to the /api/skim endpoint
+          setProcessingStatus(`Extracting events from ${file.name}...`);
+          const skimResponse = await fetch("/api/skim", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ text: chunks.join("\n") }),
+          });
+
+          if (!skimResponse.ok) {
+            throw new Error(`HTTP error! status: ${skimResponse.status}`);
+          }
+
+          const skimData = await skimResponse.json();
+          console.log(`Events extracted from ${file.name}:`, skimData);
+
+          // Step 3: Store the result in data structure
+          extractedEvents.push({
+            fileName: file.name,
+            events: skimData.result
+          });
+
         } catch (error) {
           console.error(`Error processing ${file.name}:`, error);
           // Continue with other files even if one fails
         }
       }
 
-      // Update state with the processed results
-      setProcessedFiles(
-        results.map((result) => ({
-          name: result.fileName,
-          chunks: result.chunks,
-        }))
-      );
+      if (extractedEvents.length > 0) {
+        setProcessingStatus("Formatting final results...");
+        
+        try {
+          // Combine all extracted event texts into a single string
+          const combinedEventText = extractedEvents
+            .map(item => `File: ${item.fileName}\n${item.events}`)
+            .join("\n\n");
+          
+          const formatResponse = await fetch("/api/format", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            // The format endpoint expects { text: string }, not { extractedEvents: array }
+            body: JSON.stringify({ text: combinedEventText }),
+          });
+
+          if (!formatResponse.ok) {
+            const errorText = await formatResponse.text();
+            console.error("Format API error response:", errorText);
+            throw new Error(`HTTP error! status: ${formatResponse.status}`);
+          }
+
+          const formatData = await formatResponse.json();
+          console.log("Final formatted result:", formatData);
+          
+          // Store the formatted result for display
+          setFormattedResult(formatData.result || JSON.stringify(formatData, null, 2));
+          
+        } catch (formatError) {
+          console.error("Error formatting results:", formatError);
+        }
+      } 
+
+      setProcessedFiles(chunkResults);
 
       // Display success message
-      const totalProcessedFiles = results.length;
-      const totalChunks = results.reduce(
-        (sum, file) => sum + file.totalChunks,
-        0
-      );
-
-      if (totalProcessedFiles > 0) {
+      if (chunkResults.length > 0) {
+        const totalChunks = chunkResults.reduce(
+          (sum, file) => sum + file.chunks.length,
+          0
+        );
+        
         alert(
-          `Processing complete! Created ${totalChunks} chunks from ${totalProcessedFiles} PDF file(s).`
+          `Processing complete! Created ${totalChunks} chunks from ${chunkResults.length} PDF file(s).`
         );
       } else {
         alert(
@@ -90,7 +150,7 @@ export default function Create() {
         );
       }
     } catch (error) {
-      console.error("Error processing files:", error);
+      console.error("Error in overall processing:", error);
       alert(
         error instanceof Error ? error.message : "Failed to process files."
       );
@@ -210,11 +270,25 @@ export default function Create() {
           </div>
         </form>
 
-        {/* Display processed results */}
+        {/* Display formatted results if available */}
+        {formattedResult && (
+          <div className="mt-8 space-y-4">
+            <h2 className="text-2xl font-bold text-violet-400">
+              Formatted Results
+            </h2>
+            <div className="bg-gray-900 p-4 rounded-md border border-gray-800">
+              <pre className="text-sm text-gray-300 overflow-x-auto whitespace-pre-wrap">
+                {formattedResult}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        {/* Display processed chunks */}
         {processedFiles.length > 0 && (
           <div className="mt-8 space-y-4">
             <h2 className="text-2xl font-bold text-violet-400">
-              Processing Results
+              PDF Chunks
             </h2>
 
             <div className="space-y-4">

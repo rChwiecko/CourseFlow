@@ -1,5 +1,6 @@
 'use client';
 
+import Groq from "groq-sdk";
 import * as pdfjsLib from 'pdfjs-dist';
 
 // We're going to use a different approach to initialize the worker
@@ -128,3 +129,4 @@ function chunkText(text: string, limit: number, overlap: number): string[] {
   
   return chunks;
 }
+
